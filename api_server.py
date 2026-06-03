@@ -18,12 +18,13 @@ import urllib.parse
 
 import config
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from openai import AsyncOpenAI, OpenAIError
 
 import tools  # 工具定义 + 调用闭环（与命令行版 agent.py 共用）
 import store  # 会话持久化（SQLite，重启不丢记忆）
+import resilience  # 上游调用：并发限流 + 指数退避重试
 
 store.init()
 
@@ -34,6 +35,26 @@ aclient = AsyncOpenAI(
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
 app = FastAPI(title="AI 对话机器人")
+
+# 边缘背压：在途请求过多时直接 429 快速失败，保护服务不被压垮（限流第二道防线）。
+# asyncio 单线程事件循环里，计数器的读改写之间没有 await，天然原子，无需加锁。
+MAX_INFLIGHT = int(os.getenv("XZ_MAX_INFLIGHT", "32"))
+_inflight = 0
+
+
+@app.middleware("http")
+async def backpressure(request: Request, call_next):
+    global _inflight
+    if _inflight >= MAX_INFLIGHT:
+        return JSONResponse(status_code=429,
+                            content={"detail": "服务繁忙，请稍后重试"})
+    _inflight += 1
+    try:
+        return await call_next(request)
+    finally:
+        _inflight -= 1
+
+
 SYSTEM = "你是一个友好、简洁的中文 AI 助手，名字叫小智。"
 AGENT_SYSTEM = tools.AGENT_SYSTEM   # 单一真相源在 tools.py，评测与服务端共用
 MODEL = "qwen-flash"
@@ -83,11 +104,11 @@ def trim_history(msgs: list) -> None:
 
 
 async def acall_model(msgs: list, stream: bool):
-    """统一封装异步模型调用，把 SDK 异常转成 HTTP 502，避免裸 500。"""
+    """统一封装异步模型调用：并发限流 + 退避重试；异常转 HTTP 502，避免裸 500。"""
     try:
-        return await aclient.chat.completions.create(
+        return await resilience.acall(lambda: aclient.chat.completions.create(
             model=MODEL, messages=msgs, temperature=0.7, stream=stream,
-        )
+        ))
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
 

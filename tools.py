@@ -229,12 +229,13 @@ async def run_with_tools_async(aclient, model, messages, on_tool=None, session_i
       用 asyncio.to_thread 卸载到线程池，避免在 async 端点里卡住整个事件循环。
     与同步版共享 TOOLS / DISPATCH / run_tool / 追踪逻辑。
     """
+    import resilience  # 并发限流 + 退避重试（惰性导入，避免命令行同步路径强依赖）
     turn = tracing.start_turn(session_id, messages[-1]["content"] if messages else "", model)
     try:
         for _ in range(MAX_TOOL_ROUNDS):
-            resp = await aclient.chat.completions.create(
+            resp = await resilience.acall(lambda: aclient.chat.completions.create(
                 model=model, messages=messages, tools=TOOLS, temperature=0.7,
-            )
+            ))
             turn.add_model_call(getattr(resp, "usage", None))
             msg = resp.choices[0].message
 
