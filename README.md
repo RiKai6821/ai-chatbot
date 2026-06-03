@@ -1,7 +1,74 @@
-下面是一份完整的 从0开始 指南。直接把它存成你新项目文件夹里的 README.md(比如新建文件夹 ai-chatbot/,把内容粘进去)。它分阶段:文字对话 → HTTP接口 → 语音 → 单片机接入,每阶段都能独立跑通。
+# 小智 · 端云协同 AI 语音助手
 
+一个**端云协同**的 AI 语音助手：嵌入式设备（ESP32-S3）做"瘦客户端"负责收音/播报/表情，云端服务负责语音识别、大模型对话与语音合成。一个项目串起**嵌入式固件**与 **AI Agent 服务**两条完整技术线。
 
-# AI 对话机器人 · 从0开始搭建指南
+> 在线仓库：https://github.com/RiKai6821/ai-chatbot
+
+## 架构
+
+```
+ ┌────────────── 设备端（ESP32-S3, C / ESP-IDF）──────────────┐        ┌──────── 云端（Python）────────┐
+ │ 按键唤醒 → INMP441 录音(I2S/DMA) ─────── WiFi/HTTP ───────▶ │  /voice │ STT(Paraformer) → 大模型 → TTS │
+ │ GC9A01 圆屏表情(esp_lcd) ◀── 状态机 ──── MAX98357A 播放 ◀── │ ◀────── │  + 工具调用 / RAG / 记忆        │
+ └────────────────────────────────────────────────────────────┘        └────────────────────────────────┘
+   设备只负责"听/说/显示"，不跑大模型                                      大脑在云端：会聊、能办事、可检索资料
+```
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 嵌入式 | C / **ESP-IDF v5.x**、FreeRTOS、CMake/Kconfig、组件化(BSP)、**I2S+DMA**、**esp_lcd(SPI)**、GPIO 中断、esp_http_client、cJSON |
+| 云端服务 | Python、**FastAPI**、SSE 流式、SQLite 持久化 |
+| AI / Agent | DashScope(通义千问, OpenAI 兼容)、**Function Calling**、**RAG**(text-embedding-v3)、Paraformer(STT)、CosyVoice(TTS) |
+| 工程化 | 评测框架(LLM 裁判 + CI)、结构化日志/trace 可观测性、Git |
+
+## 两条技术线（均已实现并验证）
+
+### 🔧 嵌入式固件 — `firmware-idf/`（ESP-IDF 纯 C，工程化）
+- **共享 BSP 组件**（`bsp_wifi` / `bsp_audio` / `bsp_display`）+ 4 个应用，多应用复用底层。
+- 覆盖考点：esp_wifi 事件驱动、**I2S 录音/播放 + DMA**、**esp_lcd 圆屏(分带渲染省内存)**、FreeRTOS 多任务、**GPIO 中断→队列**、状态机、HTTP 流式双向音频。
+- 旗舰应用 `esp32_voice_assistant`：按键→录音→`/voice`→播放，表情随状态同步。
+- （`firmware/` 是更早的 Arduino 原型版，保留以展示"原型→工程化"的演进。）
+
+### 🤖 AI Agent 服务 — 根目录 Python
+- `api_server.py`：`/chat`、`/chat/stream`(SSE)、`/agent`(工具调用)、`/voice`(语音进出)，含上下文压缩与会话持久化。
+- `tools.py` + `agent.py`：**函数调用闭环**（时间/天气/计算/知识检索），命令行与 HTTP 共用。
+- `rag.py` + `knowledge/`：**RAG 检索增强**，让助手据私有资料作答而非瞎编。
+- `eval_agent.py` + `evals/`：**评测框架**（工具选择 + 关键词 + LLM 裁判，退出码接 CI）。
+- `tracing.py`：**结构化日志/可观测性**（每轮 token、工具耗时、延迟 p50/p95）。
+
+## 仓库结构
+
+```
+ai-chatbot/
+├── api_server.py        # FastAPI 服务：/chat /chat/stream /agent /voice
+├── chat.py / agent.py   # 命令行：对话 / 工具调用 Agent
+├── tools.py             # 工具定义 + 调用闭环（HTTP 与命令行共用）
+├── rag.py  knowledge/   # RAG 检索 + 私有知识库
+├── eval_agent.py evals/ # Agent 评测框架
+├── tracing.py           # 结构化日志/可观测性
+├── voice.py voice_server.py # PC 语音对话 / 语音接口零件(STT+TTS)
+├── store.py config.py   # 会话持久化 / .env 加载
+├── firmware-idf/        # ESP-IDF 纯 C 固件（BSP 组件 + 4 应用）★
+└── firmware/            # Arduino 原型固件
+```
+
+## 快速上手（云端，3 步，不需要硬件）
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env          # 填入 DASHSCOPE_API_KEY
+uvicorn api_server:app --host 0.0.0.0 --port 8000   # 打开 /docs 测试
+```
+命令行体验：`python chat.py`（对话）、`python agent.py`（能办事）、`python eval_agent.py --judge`（评测）。
+设备端固件构建见 [`firmware-idf/README.md`](firmware-idf/README.md)。
+
+---
+
+# 附录：从 0 开始搭建指南（教程）
+
+> 下面是项目最初的分阶段教程（文字对话 → HTTP 接口 → 语音 → 单片机接入），每阶段都能独立跑通，保留作学习参考。
 
 一个循序渐进的项目：从命令行文字对话，到语音对话，最终接入单片机/边缘设备。
 核心原则：**大脑（大模型）在云端/电脑，设备只是"瘦客户端"**——设备只负责收输入、显示/播报，思考交给服务器。
