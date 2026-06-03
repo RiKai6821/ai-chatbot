@@ -300,13 +300,32 @@ API Key 安全	只放服务器 .env，永不写进设备/前端/git
 流式输出	stream=True，降低"感知延迟"
 成本/延迟	qwen-flash 便宜快、qwen-plus 更聪明；按需选
 上下文上限	对话太长要做"历史压缩"（保留最近N轮）防超长
-9. 路线图 Checklist
- 阶段0：python chat.py 能多轮对话
- 阶段1：流式输出
- 阶段2：/chat 接口 + Swagger 测试通过
- 阶段3：电脑上语音对话跑通
- 阶段4：买设备 → 设备发 HTTP 调通 /chat
- 进阶：加工具调用（查天气/数据库）、加人设、换语音音色、上云部署
+9. 路线图 Checklist（✅=已实现并实测，⬜=待硬件）
+- [x] 阶段0：`python chat.py` 能多轮对话
+- [x] 阶段1：流式输出（`chat.py` STREAM 开关）
+- [x] 阶段2：`/chat` 接口 + Swagger 测试通过
+- [x] 阶段3：电脑上语音对话跑通（`voice.py`，含打断 barge-in）
+- [x] 进阶：工具调用（`agent.py` / `tools.py` / `/agent`，查时间·天气·计算）
+- [x] 进阶：上下文压缩（保留最近 N 轮）+ 会话持久化（SQLite，重启不丢记忆）
+- [x] 进阶：语音进语音出接口 `/voice`（STT→大模型→TTS，给设备用）
+- [x] 阶段4·step1：ESP32 联网串口调通 `/chat`（`firmware/esp32_chat`，代码就绪）
+- [ ] 阶段4·step2~5：屏幕表情 / 录音 / 播放 / 整合语音助手 —— 固件已写好，**待上板验证**
+- [ ] 进阶：换更自然音色、上云部署
+
+### 项目现状速览
+当前已实现的 HTTP 接口（`api_server.py`，启动：`uvicorn api_server:app --host 0.0.0.0 --port 8000`）：
+
+| 接口 | 作用 |
+|------|------|
+| `POST /chat` | 一次性文字对话 |
+| `POST /chat/stream` | 流式文字对话（SSE） |
+| `POST /agent` | 能调工具（时间/天气/计算），返回 `tools_used` |
+| `POST /voice` | 语音进语音出（收 WAV → 回 WAV），供单片机用 |
+| `GET /` | 健康检查 |
+
+单片机固件见 [`firmware/`](firmware/) 目录（含接线总表、逐模块自测、服务端契约、排错清单）。
+**软件侧已全部完成；剩余工作主要是拿到 ESP32-S3 后逐模块烧录验证。**
+
 10. 常见问题
 Q：必须用阿里云百炼吗？
 不必。任何 OpenAI 兼容接口都行（OpenAI、DeepSeek、本地 Ollama）——改 base_url 和 model 即可。
