@@ -1,0 +1,9 @@
+# 工程默认配置（首次 build 会据此生成 sdkconfig）。
+# 放开主任务栈，给 HTTP/JSON 留余量。
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# 目标芯片：ESP32-S3
+CONFIG_IDF_TARGET="esp32s3"
+
+# 日志等级 INFO
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

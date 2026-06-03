@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 venv/
 sessions.db
+
+# ESP-IDF 构建产物（生成物不入库；保留 sdkconfig.defaults）
+firmware-idf/**/build/
+firmware-idf/**/sdkconfig
+firmware-idf/**/sdkconfig.old
