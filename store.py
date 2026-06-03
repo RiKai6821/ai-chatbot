@@ -28,6 +28,8 @@ _conn: sqlite3.Connection | None = None
 def init(db_path: str = DB_PATH) -> None:
     """建表并打开连接。进程启动时调用一次。"""
     global _conn
+    # 确保父目录存在（XZ_DATA_DIR 指向新目录时；":memory:" 等无目录则跳过）
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     _conn = sqlite3.connect(db_path, check_same_thread=False)
     _conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions ("

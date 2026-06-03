@@ -109,6 +109,7 @@ def build_index() -> dict:
     for c, e in zip(chunks, embs):
         c["embedding"] = e
     index = {"model": EMBED_MODEL, "hash": _knowledge_hash(), "chunks": chunks}
+    os.makedirs(os.path.dirname(INDEX_PATH) or ".", exist_ok=True)
     with open(INDEX_PATH, "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False)
     print(f"索引已建好 → {INDEX_PATH}")

@@ -177,7 +177,7 @@ def run_with_tools(client, model, messages, on_tool=None, session_id="-") -> str
     session_id: 仅用于结构化追踪，便于按会话检索日志。
     返回最终的自然语言回答文本。
 
-    全程自动打 JSON 结构化日志（见 trace.py）：模型调用次数、token、每次工具
+    全程自动打 JSON 结构化日志（见 tracing.py）：模型调用次数、token、每次工具
     调用的名/参数/结果/耗时、整轮延迟。
     """
     turn = tracing.start_turn(session_id, messages[-1]["content"] if messages else "", model)

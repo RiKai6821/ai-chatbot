@@ -236,6 +236,8 @@ async def voice(request: Request):
         raise HTTPException(status_code=504, detail="上游响应超时，请稍后重试")
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
+    except HTTPException:
+        raise                                  # acall_model 已转好的状态码(502/504)原样抛，别吞成 500
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"语音处理出错：{e}")
 
