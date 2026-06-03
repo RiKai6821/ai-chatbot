@@ -1,0 +1,6 @@
+# 阶段3 语音对话额外依赖（在装完 requirements.txt 后再装这个）
+#   .\venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+SpeechRecognition>=3.10.0
+pyttsx3>=2.90
+pyaudio>=0.2.14
+dashscope>=1.20.0
