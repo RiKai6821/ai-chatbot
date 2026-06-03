@@ -1,0 +1,31 @@
+menu "小智 音频配置（I2S 引脚 / 采样率）"
+
+    config XZ_SAMPLE_RATE
+        int "采样率 (Hz)"
+        default 16000
+        help
+            录音/播放统一采样率，16kHz 与服务端一致。
+
+    comment "INMP441 麦克风（I2S0 接收）"
+    config XZ_MIC_BCLK
+        int "MIC BCLK GPIO"
+        default 4
+    config XZ_MIC_WS
+        int "MIC WS (LRCL) GPIO"
+        default 5
+    config XZ_MIC_DIN
+        int "MIC SD (数据输入) GPIO"
+        default 6
+
+    comment "MAX98357A 功放（I2S1 发送）"
+    config XZ_SPK_BCLK
+        int "SPK BCLK GPIO"
+        default 15
+    config XZ_SPK_WS
+        int "SPK LRC (WS) GPIO"
+        default 16
+    config XZ_SPK_DOUT
+        int "SPK DIN (数据输出) GPIO"
+        default 7
+
+endmenu

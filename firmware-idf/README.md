@@ -19,6 +19,15 @@
 
 这些正是嵌入式面试的考点：RTOS、事件驱动、构建系统、内存管理、组件化。
 
+## 模块一览
+
+| 工程 | 内容 | 关键技术点 |
+|------|------|-----------|
+| `esp32_chat/` | 联网 + 调 `/chat` 文字对话 | esp_wifi 事件驱动、esp_http_client、cJSON、FreeRTOS 任务、UART/VFS |
+| `esp32_audio/` | INMP441 录音 + MAX98357A 播放自测 | **新版 I2S 标准驱动 `i2s_std.h`**、**DMA**、双路 I2S 通道、双并发 FreeRTOS 任务 |
+
+> 嵌入式岗最看重的"外设驱动 + DMA + RTOS"集中在 `esp32_audio`：两路 I2S（I2S0 收 / I2S1 发）各由独立任务驱动，底层 DMA 搬运，CPU 只做 `i2s_channel_read/write`。
+
 ## 工程结构（`esp32_chat`）
 
 ```
