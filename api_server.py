@@ -13,20 +13,23 @@
 """
 import os
 import json
+import asyncio
 import urllib.parse
 
 import config
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from openai import OpenAI, OpenAIError
+from openai import AsyncOpenAI, OpenAIError
 
 import tools  # 工具定义 + 调用闭环（与命令行版 agent.py 共用）
 import store  # 会话持久化（SQLite，重启不丢记忆）
 
 store.init()
 
-client = OpenAI(
+# 全异步：用 AsyncOpenAI，端点 async def，模型调用 await。多请求的网络等待可真正
+# 重叠，事件循环不被阻塞；STT/TTS 等阻塞调用用 asyncio.to_thread 卸载到线程池。
+aclient = AsyncOpenAI(
     api_key=os.getenv("DASHSCOPE_API_KEY"),
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
@@ -79,10 +82,10 @@ def trim_history(msgs: list) -> None:
         del msgs[1:len(msgs) - keep]
 
 
-def call_model(msgs: list, stream: bool):
-    """统一封装模型调用，把 SDK 异常转成 HTTP 502，避免裸 500。"""
+async def acall_model(msgs: list, stream: bool):
+    """统一封装异步模型调用，把 SDK 异常转成 HTTP 502，避免裸 500。"""
     try:
-        return client.chat.completions.create(
+        return await aclient.chat.completions.create(
             model=MODEL, messages=msgs, temperature=0.7, stream=stream,
         )
     except OpenAIError as e:
@@ -90,7 +93,7 @@ def call_model(msgs: list, stream: bool):
 
 
 @app.post("/chat")
-def chat(req: ChatRequest):
+async def chat(req: ChatRequest):
     """一次性返回完整回复。"""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
@@ -99,7 +102,7 @@ def chat(req: ChatRequest):
     msgs.append({"role": "user", "content": req.message})
     trim_history(msgs)
 
-    resp = call_model(msgs, stream=False)
+    resp = await acall_model(msgs, stream=False)
     reply = resp.choices[0].message.content
     msgs.append({"role": "assistant", "content": reply})
     store.save(NS_CHAT, req.session_id, msgs)
@@ -107,7 +110,7 @@ def chat(req: ChatRequest):
 
 
 @app.post("/chat/stream")
-def chat_stream(req: ChatRequest):
+async def chat_stream(req: ChatRequest):
     """流式返回：Server-Sent Events，每个增量一行 `data: {"delta": "..."}`。
 
     客户端（含单片机）按行读取，遇到 `data: [DONE]` 表示结束。
@@ -119,11 +122,11 @@ def chat_stream(req: ChatRequest):
     msgs.append({"role": "user", "content": req.message})
     trim_history(msgs)
 
-    def event_stream():
+    async def event_stream():
         reply = ""
         try:
-            stream = call_model(msgs, stream=True)
-            for chunk in stream:
+            stream = await acall_model(msgs, stream=True)
+            async for chunk in stream:
                 delta = chunk.choices[0].delta.content
                 if delta:
                     reply += delta
@@ -141,7 +144,7 @@ def chat_stream(req: ChatRequest):
 
 
 @app.post("/agent")
-def agent(req: ChatRequest):
+async def agent(req: ChatRequest):
     """能办事的版本：模型按需调用工具（时间/天气/计算），再给出最终回答。"""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
@@ -152,8 +155,8 @@ def agent(req: ChatRequest):
 
     used: list = []   # 记录这次实际调了哪些工具，方便前端/设备展示
     try:
-        reply = tools.run_with_tools(
-            client, MODEL, msgs,
+        reply = await tools.run_with_tools_async(
+            aclient, MODEL, msgs,
             on_tool=lambda name, args, result: used.append(
                 {"name": name, "args": args, "result": result}
             ),
@@ -185,11 +188,11 @@ async def voice(request: Request):
     session_id = request.headers.get("X-Session-Id", "default")
 
     try:
-        # 1) 听：STT
-        text = vs.stt_from_bytes(wav_in).strip()
+        # 1) 听：STT（阻塞的网络调用，卸载到线程池，避免堵住事件循环）
+        text = (await asyncio.to_thread(vs.stt_from_bytes, wav_in)).strip()
         if not text:
             # 没听清也回一句语音，体验更好
-            wav_out = vs.tts_wav("我没听清，请再说一次。")
+            wav_out = await asyncio.to_thread(vs.tts_wav, "我没听清，请再说一次。")
             return Response(content=wav_out, media_type="audio/wav",
                             headers={"X-Reply-Text": urllib.parse.quote("我没听清，请再说一次。")})
 
@@ -197,13 +200,13 @@ async def voice(request: Request):
         msgs = get_history(session_id, VOICE_SESSIONS, VOICE_SYSTEM, NS_VOICE)
         msgs.append({"role": "user", "content": text})
         trim_history(msgs)
-        resp = call_model(msgs, stream=False)
+        resp = await acall_model(msgs, stream=False)
         reply = resp.choices[0].message.content
         msgs.append({"role": "assistant", "content": reply})
         store.save(NS_VOICE, session_id, msgs)
 
-        # 3) 说：TTS → WAV
-        wav_out = vs.tts_wav(reply)
+        # 3) 说：TTS → WAV（同样卸载到线程池）
+        wav_out = await asyncio.to_thread(vs.tts_wav, reply)
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
     except Exception as e:

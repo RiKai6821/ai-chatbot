@@ -11,6 +11,7 @@
 import json
 import math
 import time
+import asyncio
 import datetime
 
 import tracing  # 结构化追踪（自动给每轮对话/工具调用打 JSON 日志）
@@ -149,6 +150,25 @@ def run_tool(name: str, args: dict) -> str:
         return f"工具 {name} 执行出错：{e}"
 
 
+def _assistant_msg(msg) -> dict:
+    """把模型返回的 tool_calls 这条 assistant 消息转成可回填进 messages 的 dict。"""
+    return {
+        "role": "assistant",
+        "content": msg.content or "",
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in msg.tool_calls
+        ],
+    }
+
+
 def run_with_tools(client, model, messages, on_tool=None, session_id="-") -> str:
     """让模型回答；若它要求调工具，就执行并回填，循环到给出最终文字答案。
 
@@ -176,21 +196,7 @@ def run_with_tools(client, model, messages, on_tool=None, session_id="-") -> str
                 return msg.content
 
             # 1) 先把"模型想调工具"这条 assistant 消息原样记进历史
-            messages.append({
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in msg.tool_calls
-                ],
-            })
+            messages.append(_assistant_msg(msg))
 
             # 2) 逐个执行，结果以 role=tool 回填（必须带上对应的 tool_call_id）
             for tc in msg.tool_calls:
@@ -207,6 +213,50 @@ def run_with_tools(client, model, messages, on_tool=None, session_id="-") -> str
                     "content": result,
                 })
             # 3) 带着工具结果再次进入循环，让模型继续（可能再调，或给最终答案）
+
+        turn.finish("（工具调用次数过多，已停止）")
+        return "（工具调用次数过多，已停止）"
+    except Exception as e:
+        turn.finish(None, error=str(e))
+        raise
+
+
+async def run_with_tools_async(aclient, model, messages, on_tool=None, session_id="-") -> str:
+    """run_with_tools 的异步版（高并发用）。
+
+    - 模型调用 await，不阻塞事件循环；多个请求的网络等待可真正重叠。
+    - 工具函数本身是同步的（其中 search_knowledge 还会发 embedding 网络请求，属阻塞），
+      用 asyncio.to_thread 卸载到线程池，避免在 async 端点里卡住整个事件循环。
+    与同步版共享 TOOLS / DISPATCH / run_tool / 追踪逻辑。
+    """
+    turn = tracing.start_turn(session_id, messages[-1]["content"] if messages else "", model)
+    try:
+        for _ in range(MAX_TOOL_ROUNDS):
+            resp = await aclient.chat.completions.create(
+                model=model, messages=messages, tools=TOOLS, temperature=0.7,
+            )
+            turn.add_model_call(getattr(resp, "usage", None))
+            msg = resp.choices[0].message
+
+            if not msg.tool_calls:
+                messages.append({"role": "assistant", "content": msg.content})
+                turn.finish(msg.content)
+                return msg.content
+
+            messages.append(_assistant_msg(msg))
+            for tc in msg.tool_calls:
+                args = json.loads(tc.function.arguments or "{}")
+                t0 = time.perf_counter()
+                result = await asyncio.to_thread(run_tool, tc.function.name, args)
+                turn.add_tool_call(tc.function.name, args, result,
+                                   (time.perf_counter() - t0) * 1000)
+                if on_tool:
+                    on_tool(tc.function.name, args, result)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
 
         turn.finish("（工具调用次数过多，已停止）")
         return "（工具调用次数过多，已停止）"
