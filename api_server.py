@@ -8,13 +8,15 @@
     POST /chat         —— 一次性返回完整回复（简单，延迟高）
     POST /chat/stream  —— 流式返回（SSE，边生成边吐字，设备/前端体验更好）
     POST /agent        —— 能调工具的版本（查时间/天气、做计算，从"会聊"到"能办事"）
+    POST /voice        —— 语音进语音出（收 WAV → STT → 大模型 → TTS → 回 WAV），给设备用
     GET  /             —— 健康检查
 """
 import os
 import json
+import urllib.parse
 
 import config
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI, OpenAIError
@@ -42,8 +44,16 @@ MODEL = "qwen-flash"
 # 普通对话与 Agent 各用一个命名空间(ns)，避免两种 system 人设互相串。
 SESSIONS: dict[str, list] = {}
 AGENT_SESSIONS: dict[str, list] = {}
+VOICE_SESSIONS: dict[str, list] = {}
 NS_CHAT = "chat"
 NS_AGENT = "agent"
+NS_VOICE = "voice"
+
+# 语音助手专用人设：口语化、不带 emoji（会被读出来）。
+VOICE_SYSTEM = (
+    "你是一个友好、生动的中文语音助手，名字叫小智，说话自然、简洁、有感情。"
+    "日常问答两三句话即可，别啰嗦。不要使用任何表情符号(emoji)，因为你的回答会被读出来。"
+)
 
 # 上下文上限：每个会话最多保留最近 MAX_TURNS 轮（1 轮 = 1 问 + 1 答）。
 # 超过就丢掉最老的几轮，防止对话越长 token 越多以致超限/烧钱。system 永远保留。
@@ -156,6 +166,55 @@ def agent(req: ChatRequest):
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
     store.save(NS_AGENT, req.session_id, msgs)
     return {"reply": reply, "tools_used": used}
+
+
+@app.post("/voice")
+async def voice(request: Request):
+    """语音进、语音出：收设备录的 WAV → 听懂 → 想 → 说成 WAV 回去。
+
+    请求：Body=WAV(16k/16bit/单声道)，Header `X-Session-Id` 区分设备。
+    返回：Body=WAV(16k/16bit/单声道)；Header `X-Reply-Text` 是回复文本(URL编码)。
+    """
+    # 惰性导入：没装语音依赖(dashscope)时，基础服务仍可启动，只有本接口报 503。
+    try:
+        import voice_server as vs
+    except Exception as e:
+        raise HTTPException(status_code=503,
+                            detail=f"语音依赖未安装，请 pip install -r requirements-voice.txt（{e}）")
+
+    wav_in = await request.body()
+    if not wav_in:
+        raise HTTPException(status_code=400, detail="请求体为空，应为 WAV 音频")
+    session_id = request.headers.get("X-Session-Id", "default")
+
+    try:
+        # 1) 听：STT
+        text = vs.stt_from_bytes(wav_in).strip()
+        if not text:
+            # 没听清也回一句语音，体验更好
+            wav_out = vs.tts_wav("我没听清，请再说一次。")
+            return Response(content=wav_out, media_type="audio/wav",
+                            headers={"X-Reply-Text": urllib.parse.quote("我没听清，请再说一次。")})
+
+        # 2) 想：带记忆地问大模型（语音人设 + 持久化）
+        msgs = get_history(session_id, VOICE_SESSIONS, VOICE_SYSTEM, NS_VOICE)
+        msgs.append({"role": "user", "content": text})
+        trim_history(msgs)
+        resp = call_model(msgs, stream=False)
+        reply = resp.choices[0].message.content
+        msgs.append({"role": "assistant", "content": reply})
+        store.save(NS_VOICE, session_id, msgs)
+
+        # 3) 说：TTS → WAV
+        wav_out = vs.tts_wav(reply)
+    except OpenAIError as e:
+        raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"语音处理出错：{e}")
+
+    # 文本放 Header 方便设备显示/调试；中文要 URL 编码，否则 Header 不能带非 ASCII。
+    return Response(content=wav_out, media_type="audio/wav",
+                    headers={"X-Reply-Text": urllib.parse.quote(reply)})
 
 
 @app.get("/")
