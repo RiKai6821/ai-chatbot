@@ -1,0 +1,58 @@
+[
+  {
+    "name": "wifi-5ghz",
+    "input": "小智支持5GHz的wifi吗？",
+    "expect_tools": ["search_knowledge"],
+    "expect_contains": ["2.4"],
+    "expect_not_contains": [],
+    "judge": "回答应明确说明只支持2.4GHz、不支持5GHz"
+  },
+  {
+    "name": "warranty-drop",
+    "input": "我把小智摔坏了，保修能免费修吗？",
+    "expect_tools": ["search_knowledge"],
+    "expect_contains": [],
+    "expect_not_contains": [],
+    "judge": "回答应说明人为损坏（摔坏）不在免费保修范围内"
+  },
+  {
+    "name": "battery-life",
+    "input": "小智充满电能用多久？",
+    "expect_tools": ["search_knowledge"],
+    "expect_contains": ["4"],
+    "expect_not_contains": [],
+    "judge": "回答应提到连续对话约4小时或待机约3天"
+  },
+  {
+    "name": "calc",
+    "input": "帮我算一下 (23*19+7)/2 等于多少",
+    "expect_tools": ["calculate"],
+    "expect_contains": ["222"],
+    "expect_not_contains": [],
+    "judge": "回答的计算结果应为222"
+  },
+  {
+    "name": "weather",
+    "input": "北京今天天气怎么样？",
+    "expect_tools": ["get_weather"],
+    "expect_contains": [],
+    "expect_not_contains": [],
+    "judge": "回答应给出北京的天气情况"
+  },
+  {
+    "name": "time",
+    "input": "现在几点了？",
+    "expect_tools": ["get_current_time"],
+    "expect_contains": [],
+    "expect_not_contains": [],
+    "judge": "回答应包含一个具体的时间或日期（不必判断其是否为真实当前时间）"
+  },
+  {
+    "name": "chitchat-no-tool",
+    "input": "你好呀，自我介绍一下",
+    "expect_tools": [],
+    "expect_contains": ["小智"],
+    "expect_not_contains": [],
+    "judge": "回答应是友好的自我介绍，不需要调用任何工具"
+  }
+]

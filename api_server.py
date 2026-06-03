@@ -32,12 +32,7 @@ client = OpenAI(
 )
 app = FastAPI(title="AI 对话机器人")
 SYSTEM = "你是一个友好、简洁的中文 AI 助手，名字叫小智。"
-AGENT_SYSTEM = (
-    "你是一个会使用工具的中文助手，名字叫小智。"
-    "需要实时信息（时间、天气）或精确计算时，优先调用对应工具，不要凭空编造。"
-    "涉及小智产品本身（规格、常见问题、保修售后等）时，先用 search_knowledge 检索知识库再回答。"
-    "拿到工具结果后，用自然、简洁的中文把答案讲给用户。"
-)
+AGENT_SYSTEM = tools.AGENT_SYSTEM   # 单一真相源在 tools.py，评测与服务端共用
 MODEL = "qwen-flash"
 
 # 每个会话一条消息历史。内存 dict 当缓存，背后用 SQLite 持久化（store.py）：
