@@ -26,6 +26,7 @@
 #include "wifi.h"
 #include "i2s_mic.h"
 #include "i2s_speaker.h"
+#include "display.h"
 #include "voice_client.h"
 
 static const char *TAG = "app";
@@ -53,11 +54,15 @@ static void button_init(void)
     gpio_isr_handler_add(CONFIG_XZ_BTN_GPIO, btn_isr, NULL);
 }
 
-// 状态变化：当前用日志体现；后续可在此驱动 GC9A01 表情或 RGB 灯
+// 状态变化：打日志 + 同步切换圆屏表情（待机/听/想/说）
 static void on_state(xz_state_t st)
 {
-    const char *name[] = { "待机", "听…", "想…", "说…" };
+    static const char *name[] = { "待机", "听…", "想…", "说…" };
+    static const display_mood_t mood[] = {
+        MOOD_IDLE, MOOD_LISTENING, MOOD_THINKING, MOOD_SPEAKING,
+    };
     ESP_LOGI(TAG, "[状态] %s", name[st]);
+    display_set_mood(mood[st]);
 }
 
 static void conversation_task(void *arg)
@@ -96,6 +101,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(mic_init());
     ESP_ERROR_CHECK(speaker_init());
+    ESP_ERROR_CHECK(display_init());
 
     s_btn_q = xQueueCreate(4, sizeof(uint32_t));
     button_init();

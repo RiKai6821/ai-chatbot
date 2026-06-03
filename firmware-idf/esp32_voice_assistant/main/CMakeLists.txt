@@ -2,5 +2,5 @@
 idf_component_register(
     SRCS "main.c" "voice_client.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp_wifi bsp_audio nvs_flash esp_http_client driver
+    REQUIRES bsp_wifi bsp_audio bsp_display nvs_flash esp_http_client driver
 )

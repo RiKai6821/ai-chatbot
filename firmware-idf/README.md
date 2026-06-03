@@ -27,10 +27,12 @@
 firmware-idf/
 ├── components/                 # 共享组件（多应用复用）
 │   ├── bsp_wifi/               #   联网（esp_wifi 事件驱动）
-│   └── bsp_audio/              #   I2S 录音+播放（i2s_std + DMA）
+│   ├── bsp_audio/              #   I2S 录音+播放（i2s_std + DMA）
+│   └── bsp_display/            #   GC9A01 圆屏（esp_lcd + SPI + DMA + 表情渲染）
 ├── esp32_chat/                 # 应用：文字对话（用 bsp_wifi）
 ├── esp32_audio/                # 应用：音频自测（用 bsp_audio）
-└── esp32_voice_assistant/      # 应用：整合语音助手（用 bsp_wifi + bsp_audio）
+├── esp32_display/              # 应用：圆屏表情自测（用 bsp_display）
+└── esp32_voice_assistant/      # 应用：整合语音助手（wifi+audio+display）
 ```
 
 各应用顶层 `CMakeLists.txt` 用 `EXTRA_COMPONENT_DIRS` 指向 `../components`，
@@ -43,7 +45,11 @@ firmware-idf/
 |------|------|-----------|
 | `esp32_chat/` | 联网 + 调 `/chat` 文字对话 | esp_http_client、cJSON、FreeRTOS 任务、UART/VFS |
 | `esp32_audio/` | INMP441 录音 + MAX98357A 播放自测 | **i2s_std 新标准驱动 + DMA**、双路 I2S、双并发任务 |
-| `esp32_voice_assistant/` | 整合：按键→录音→`/voice`→播放 | **GPIO 中断(ISR)→队列**、**状态机**、**HTTP 流式双向音频**、多任务 |
+| `esp32_display/` | GC9A01 圆屏表情自测 | **esp_lcd 面板 API + SPI + DMA**、分带渲染省内存、软件光栅化 |
+| `esp32_voice_assistant/` | 整合：按键→录音→`/voice`→播放+表情 | **GPIO 中断(ISR)→队列**、**状态机**、**HTTP 流式双向音频**、表情同步、多任务 |
+
+> `bsp_display` 走底层 `esp_lcd`（SPI+DMA）而非现成图形库：标准的 SPI 总线→panel_io→gc9a01 面板初始化，
+> 再用 **240×40 分带缓冲**逐带光栅化刷屏（省内存、不依赖 PSRAM）。`esp_lcd_gc9a01` 经组件管理器自动拉取。
 
 > 简历"系统设计"亮点在 `esp32_voice_assistant`：按键走 **ISR→FreeRTOS 队列**（ISR 只做最少事）；
 > 一个状态机任务跑"待机→听→想→说"；一轮对话**全程流式**（边录边上传、边接收边播放），

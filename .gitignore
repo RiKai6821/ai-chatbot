@@ -8,3 +8,5 @@ sessions.db
 firmware-idf/**/build/
 firmware-idf/**/sdkconfig
 firmware-idf/**/sdkconfig.old
+firmware-idf/**/managed_components/
+firmware-idf/**/dependencies.lock

@@ -1,0 +1,4 @@
+# 通过 IDF 组件管理器拉取 GC9A01 面板驱动（idf.py 首次 build 会自动下载）。
+dependencies:
+  idf: ">=5.0"
+  espressif/esp_lcd_gc9a01: "^2.0.0"
