@@ -13,11 +13,14 @@
     msgs = store.load("chat", "default")          # 没有则返回 None
     store.save("chat", "default", msgs)
 """
+import os
 import json
 import sqlite3
 import threading
 
-DB_PATH = "sessions.db"
+# 可写数据目录：默认当前目录；容器里设 XZ_DATA_DIR 指向挂载卷以持久化。
+DATA_DIR = os.getenv("XZ_DATA_DIR", ".")
+DB_PATH = os.path.join(DATA_DIR, "sessions.db")
 _lock = threading.Lock()      # sqlite 连接非线程安全，FastAPI 多线程下加锁最稳妥
 _conn: sqlite3.Connection | None = None
 

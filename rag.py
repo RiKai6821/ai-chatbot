@@ -29,7 +29,7 @@ client = OpenAI(
 )
 
 KNOWLEDGE_DIR = "knowledge"
-INDEX_PATH = "rag_index.json"
+INDEX_PATH = os.path.join(os.getenv("XZ_DATA_DIR", "."), "rag_index.json")
 EMBED_MODEL = "text-embedding-v3"
 EMBED_BATCH = 10                 # DashScope 单次 embedding 输入条数上限，保守取 10
 CHUNK_MAX = 400                  # 每块最大字符数

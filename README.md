@@ -64,6 +64,19 @@ uvicorn api_server:app --host 0.0.0.0 --port 8000   # 打开 /docs 测试
 命令行体验：`python chat.py`（对话）、`python agent.py`（能办事）、`python eval_agent.py --judge`（评测）。
 设备端固件构建见 [`firmware-idf/README.md`](firmware-idf/README.md)。
 
+## 部署（Docker）
+
+```bash
+cp .env.example .env          # 填入 DASHSCOPE_API_KEY
+docker compose up -d --build  # 起服务，端口 8000
+# 或不用 compose：
+# docker build -t xiaozhi-api . && docker run -p 8000:8000 --env-file .env xiaozhi-api
+```
+- 镜像基于 `python:3.12-slim`，非 root 运行，带 `HEALTHCHECK`。
+- 会话库/日志/RAG 索引通过 `XZ_DATA_DIR` 落在挂载卷 `xz-data`，容器重建不丢记忆。
+- 韧性参数（并发/超时/背压）可用环境变量覆盖，见 `resilience.py` 与 `docker-compose.yml`。
+- `DASHSCOPE_API_KEY` 仅运行时由 `.env` 注入，不打进镜像。
+
 ---
 
 # 附录：从 0 开始搭建指南（教程）

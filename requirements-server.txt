@@ -1,0 +1,4 @@
+# 容器/服务端依赖：核心 + 语音接口(/voice)所需的 dashscope。
+# （pyaudio/pyttsx3 等是 PC 端 voice.py 用的，服务端不需要，故不在此。）
+-r requirements.txt
+dashscope>=1.20.0

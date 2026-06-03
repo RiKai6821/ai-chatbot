@@ -1,0 +1,21 @@
+# 保持镜像精简、且绝不把密钥/构建产物打进镜像
+.git/
+venv/
+__pycache__/
+*.pyc
+
+# 嵌入式固件与镜像无关
+firmware/
+firmware-idf/
+
+# 密钥与运行时数据
+.env
+sessions.db
+rag_index.json
+logs/
+data/
+
+# 文档/测试用例（运行时不需要）
+*.md
+evals/
+docs/

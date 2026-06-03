@@ -1,0 +1,22 @@
+# 一键起服务：docker compose up -d
+# 前提：当前目录有 .env（含 DASHSCOPE_API_KEY）。
+services:
+  api:
+    build: .
+    image: xiaozhi-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env                 # 注入 DASHSCOPE_API_KEY 等
+    environment:
+      XZ_DATA_DIR: /app/data
+      # 韧性参数按需覆盖（默认见 resilience.py）：
+      # XZ_MAX_CONCURRENCY: "8"
+      # XZ_MAX_INFLIGHT: "32"
+      # XZ_TIMEOUT: "30"
+    volumes:
+      - xz-data:/app/data    # 持久化会话库/日志/RAG 索引
+    restart: unless-stopped
+
+volumes:
+  xz-data:

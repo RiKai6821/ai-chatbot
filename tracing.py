@@ -21,7 +21,7 @@ import uuid
 import datetime
 import threading
 
-LOG_PATH = os.path.join("logs", "agent.jsonl")
+LOG_PATH = os.path.join(os.getenv("XZ_DATA_DIR", "."), "logs", "agent.jsonl")
 _lock = threading.Lock()
 ECHO = bool(os.getenv("XZ_TRACE_ECHO"))
 
