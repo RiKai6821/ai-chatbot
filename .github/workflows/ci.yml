@@ -1,0 +1,32 @@
+name: CI
+
+# 每次 push / PR 到 main：跑语法检查 + 离线单元测试。
+# 这些测试不联网、不需要 API Key、零成本，适合做必过门禁。
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Syntax check (compileall)
+        run: python -m compileall -q .
+
+      - name: Offline unit tests
+        env:
+          DASHSCOPE_API_KEY: ci-dummy-key   # 仅占位让 import config 通过，不发网络
+        run: pytest -q

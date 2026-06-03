@@ -32,7 +32,18 @@ TIMEOUT = float(os.getenv("XZ_TIMEOUT", "30"))
 # 哪些异常值得重试（瞬时/可恢复）。鉴权错误、参数错误等不在此列，不该重试。
 RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
 
-_sem = asyncio.Semaphore(MAX_CONCURRENCY)
+# 信号量按事件循环懒创建：asyncio.Semaphore 绑定到首次使用它的事件循环，
+# 跨循环复用会报错。按当前运行的 loop 缓存一份，兼容 uvicorn / 测试里多次 asyncio.run。
+_sems: dict = {}
+
+
+def _get_sem() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    sem = _sems.get(loop)
+    if sem is None:
+        sem = asyncio.Semaphore(MAX_CONCURRENCY)
+        _sems[loop] = sem
+    return sem
 
 
 async def acall(make_coro, *, attempts: int = RETRY_ATTEMPTS, timeout: float = None):
@@ -44,7 +55,7 @@ async def acall(make_coro, *, attempts: int = RETRY_ATTEMPTS, timeout: float = N
     """
     timeout = TIMEOUT if timeout is None else timeout
     last_err = None
-    async with _sem:                       # 并发限流：超过上限的调用在此排队
+    async with _get_sem():                 # 并发限流：超过上限的调用在此排队
         for i in range(attempts):
             try:
                 # wait_for 给单次调用设硬超时；超时会取消该协程，避免慢请求拖死并发槽

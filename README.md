@@ -1,5 +1,7 @@
 # 小智 · 端云协同 AI 语音助手
 
+[![CI](https://github.com/RiKai6821/ai-chatbot/actions/workflows/ci.yml/badge.svg)](https://github.com/RiKai6821/ai-chatbot/actions/workflows/ci.yml)
+
 一个**端云协同**的 AI 语音助手：嵌入式设备（ESP32-S3）做"瘦客户端"负责收音/播报/表情，云端服务负责语音识别、大模型对话与语音合成。一个项目串起**嵌入式固件**与 **AI Agent 服务**两条完整技术线。
 
 > 在线仓库：https://github.com/RiKai6821/ai-chatbot
