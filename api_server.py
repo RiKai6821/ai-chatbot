@@ -157,6 +157,7 @@ def agent(req: ChatRequest):
             on_tool=lambda name, args, result: used.append(
                 {"name": name, "args": args, "result": result}
             ),
+            session_id=req.session_id,
         )
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")

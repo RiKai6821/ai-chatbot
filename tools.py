@@ -10,7 +10,10 @@
 """
 import json
 import math
+import time
 import datetime
+
+import tracing  # 结构化追踪（自动给每轮对话/工具调用打 JSON 日志）
 
 MAX_TOOL_ROUNDS = 5   # 一次提问里最多连续调几次工具，防死循环
 
@@ -146,52 +149,67 @@ def run_tool(name: str, args: dict) -> str:
         return f"工具 {name} 执行出错：{e}"
 
 
-def run_with_tools(client, model, messages, on_tool=None) -> str:
+def run_with_tools(client, model, messages, on_tool=None, session_id="-") -> str:
     """让模型回答；若它要求调工具，就执行并回填，循环到给出最终文字答案。
 
     messages 会被原地追加（assistant / tool 消息），调用方拿它即可作为"记忆"。
     on_tool(name, args, result): 可选回调，用于打印/日志。
+    session_id: 仅用于结构化追踪，便于按会话检索日志。
     返回最终的自然语言回答文本。
+
+    全程自动打 JSON 结构化日志（见 trace.py）：模型调用次数、token、每次工具
+    调用的名/参数/结果/耗时、整轮延迟。
     """
-    for _ in range(MAX_TOOL_ROUNDS):
-        resp = client.chat.completions.create(
-            model=model, messages=messages, tools=TOOLS, temperature=0.7,
-        )
-        msg = resp.choices[0].message
+    turn = tracing.start_turn(session_id, messages[-1]["content"] if messages else "", model)
+    try:
+        for _ in range(MAX_TOOL_ROUNDS):
+            resp = client.chat.completions.create(
+                model=model, messages=messages, tools=TOOLS, temperature=0.7,
+            )
+            turn.add_model_call(getattr(resp, "usage", None))
+            msg = resp.choices[0].message
 
-        if not msg.tool_calls:
-            # 没有要调工具 —— 这是最终回答
-            messages.append({"role": "assistant", "content": msg.content})
-            return msg.content
+            if not msg.tool_calls:
+                # 没有要调工具 —— 这是最终回答
+                messages.append({"role": "assistant", "content": msg.content})
+                turn.finish(msg.content)
+                return msg.content
 
-        # 1) 先把"模型想调工具"这条 assistant 消息原样记进历史
-        messages.append({
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in msg.tool_calls
-            ],
-        })
-
-        # 2) 逐个执行，结果以 role=tool 回填（必须带上对应的 tool_call_id）
-        for tc in msg.tool_calls:
-            args = json.loads(tc.function.arguments or "{}")
-            result = run_tool(tc.function.name, args)
-            if on_tool:
-                on_tool(tc.function.name, args, result)
+            # 1) 先把"模型想调工具"这条 assistant 消息原样记进历史
             messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ],
             })
-        # 3) 带着工具结果再次进入循环，让模型继续（可能再调，或给最终答案）
 
-    return "（工具调用次数过多，已停止）"
+            # 2) 逐个执行，结果以 role=tool 回填（必须带上对应的 tool_call_id）
+            for tc in msg.tool_calls:
+                args = json.loads(tc.function.arguments or "{}")
+                t0 = time.perf_counter()
+                result = run_tool(tc.function.name, args)
+                turn.add_tool_call(tc.function.name, args, result,
+                                   (time.perf_counter() - t0) * 1000)
+                if on_tool:
+                    on_tool(tc.function.name, args, result)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
+            # 3) 带着工具结果再次进入循环，让模型继续（可能再调，或给最终答案）
+
+        turn.finish("（工具调用次数过多，已停止）")
+        return "（工具调用次数过多，已停止）"
+    except Exception as e:
+        turn.finish(None, error=str(e))
+        raise
