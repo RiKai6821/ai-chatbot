@@ -1,7 +1,6 @@
-# 组件注册：源文件 + 依赖的 IDF 组件。
-# REQUIRES 显式声明依赖，是 IDF component 化工程的规范写法。
+# 组件注册：联网用共享组件 bsp_wifi，HTTP/JSON 用 IDF 自带组件。
 idf_component_register(
-    SRCS "main.c" "wifi.c" "chat_client.c"
+    SRCS "main.c" "chat_client.c"
     INCLUDE_DIRS "."
-    REQUIRES nvs_flash esp_wifi esp_event esp_netif esp_http_client json driver esp_timer
+    REQUIRES bsp_wifi nvs_flash esp_http_client json driver
 )

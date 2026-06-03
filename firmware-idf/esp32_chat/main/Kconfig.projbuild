@@ -1,16 +1,5 @@
-# 工程配置项：通过 `idf.py menuconfig` 在 "小智 Chat 配置" 菜单里改，
-# 不用改源码、也不会把 WiFi 密码写死进版本库。这是 IDF 的标准做法。
+# 本应用配置（WiFi 凭据在共享组件 bsp_wifi 的菜单里）。
 menu "小智 Chat 配置"
-
-    config XZ_WIFI_SSID
-        string "WiFi SSID"
-        default "your-wifi-2.4G"
-        help
-            ESP32 多数只支持 2.4GHz。
-
-    config XZ_WIFI_PASSWORD
-        string "WiFi 密码"
-        default "your-password"
 
     config XZ_SERVER_URL
         string "服务端 /chat 地址"

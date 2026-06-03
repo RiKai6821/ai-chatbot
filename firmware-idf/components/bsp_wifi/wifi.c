@@ -22,7 +22,6 @@ static const char *TAG = "wifi";
 static EventGroupHandle_t s_wifi_events;
 static int s_retry = 0;
 
-// 事件回调：WiFi/IP 的各种事件都汇到这里
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
@@ -70,7 +69,6 @@ esp_err_t wifi_connect(void)
 
     ESP_LOGI(TAG, "连接 WiFi: %s", CONFIG_XZ_WIFI_SSID);
 
-    // 阻塞等待结果
     EventBits_t bits = xEventGroupWaitBits(
         s_wifi_events, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
         pdFALSE, pdFALSE, portMAX_DELAY);

@@ -15,7 +15,6 @@ static i2s_chan_handle_t s_rx = NULL;
 
 esp_err_t mic_init(void)
 {
-    // 通道配置：I2S0 主机；默认含 DMA 描述符数量/帧数（可按需调大降低丢帧）
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     chan_cfg.dma_desc_num = 6;     // DMA 描述符个数
     chan_cfg.dma_frame_num = 240;  // 每个描述符帧数（影响延迟/吞吐）
@@ -34,8 +33,7 @@ esp_err_t mic_init(void)
             .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
         },
     };
-    // INMP441 的 L/R 接 GND -> 数据在左声道
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;  // INMP441 L/R 接 GND -> 左声道
 
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(s_rx, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(s_rx));

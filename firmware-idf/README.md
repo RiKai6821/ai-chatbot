@@ -19,14 +19,35 @@
 
 这些正是嵌入式面试的考点：RTOS、事件驱动、构建系统、内存管理、组件化。
 
-## 模块一览
+## 工作区结构：共享 BSP 组件 + 多应用
+
+这是工业代码的典型组织方式——**底层硬件抽象(BSP)抽成可复用组件，多个应用在其上构建**：
+
+```
+firmware-idf/
+├── components/                 # 共享组件（多应用复用）
+│   ├── bsp_wifi/               #   联网（esp_wifi 事件驱动）
+│   └── bsp_audio/              #   I2S 录音+播放（i2s_std + DMA）
+├── esp32_chat/                 # 应用：文字对话（用 bsp_wifi）
+├── esp32_audio/                # 应用：音频自测（用 bsp_audio）
+└── esp32_voice_assistant/      # 应用：整合语音助手（用 bsp_wifi + bsp_audio）
+```
+
+各应用顶层 `CMakeLists.txt` 用 `EXTRA_COMPONENT_DIRS` 指向 `../components`，
+`main/CMakeLists.txt` 用 `REQUIRES bsp_wifi bsp_audio` 声明依赖。WiFi 凭据、I2S 引脚
+都在对应组件的 menuconfig 菜单里配。
+
+## 应用一览
 
 | 工程 | 内容 | 关键技术点 |
 |------|------|-----------|
-| `esp32_chat/` | 联网 + 调 `/chat` 文字对话 | esp_wifi 事件驱动、esp_http_client、cJSON、FreeRTOS 任务、UART/VFS |
-| `esp32_audio/` | INMP441 录音 + MAX98357A 播放自测 | **新版 I2S 标准驱动 `i2s_std.h`**、**DMA**、双路 I2S 通道、双并发 FreeRTOS 任务 |
+| `esp32_chat/` | 联网 + 调 `/chat` 文字对话 | esp_http_client、cJSON、FreeRTOS 任务、UART/VFS |
+| `esp32_audio/` | INMP441 录音 + MAX98357A 播放自测 | **i2s_std 新标准驱动 + DMA**、双路 I2S、双并发任务 |
+| `esp32_voice_assistant/` | 整合：按键→录音→`/voice`→播放 | **GPIO 中断(ISR)→队列**、**状态机**、**HTTP 流式双向音频**、多任务 |
 
-> 嵌入式岗最看重的"外设驱动 + DMA + RTOS"集中在 `esp32_audio`：两路 I2S（I2S0 收 / I2S1 发）各由独立任务驱动，底层 DMA 搬运，CPU 只做 `i2s_channel_read/write`。
+> 简历"系统设计"亮点在 `esp32_voice_assistant`：按键走 **ISR→FreeRTOS 队列**（ISR 只做最少事）；
+> 一个状态机任务跑"待机→听→想→说"；一轮对话**全程流式**（边录边上传、边接收边播放），
+> 不缓存整段音频、不依赖 PSRAM。它对接服务端的 `POST /voice` 接口（已实现并实测）。
 
 ## 工程结构（`esp32_chat`）
 

@@ -1,10 +1,9 @@
-menu "小智 音频配置（I2S 引脚 / 采样率）"
+# 共享组件配置：I2S 引脚与采样率。
+menu "BSP 音频（I2S 引脚 / 采样率）"
 
     config XZ_SAMPLE_RATE
         int "采样率 (Hz)"
         default 16000
-        help
-            录音/播放统一采样率，16kHz 与服务端一致。
 
     comment "INMP441 麦克风（I2S0 接收）"
     config XZ_MIC_BCLK

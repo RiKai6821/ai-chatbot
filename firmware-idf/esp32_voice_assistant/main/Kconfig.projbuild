@@ -1,0 +1,23 @@
+# 本应用配置（WiFi 在 bsp_wifi、I2S 引脚在 bsp_audio 的菜单里）。
+menu "小智 语音助手 配置"
+
+    config XZ_VOICE_URL
+        string "服务端 /voice 地址"
+        default "http://192.168.1.10:8000/voice"
+        help
+            你电脑的局域网 IP；服务端启动要带 --host 0.0.0.0。
+
+    config XZ_SESSION_ID
+        string "会话 ID"
+        default "esp32-voice-1"
+
+    config XZ_RECORD_SECONDS
+        int "每次按键录音时长 (秒)"
+        default 4
+        range 1 10
+
+    config XZ_BTN_GPIO
+        int "唤醒按键 GPIO（板载 BOOT 键为 0）"
+        default 0
+
+endmenu

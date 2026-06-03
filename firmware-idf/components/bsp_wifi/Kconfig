@@ -1,0 +1,14 @@
+# 共享组件配置：WiFi 凭据（menuconfig 里改，不入版本库）。
+menu "BSP WiFi"
+
+    config XZ_WIFI_SSID
+        string "WiFi SSID"
+        default "your-wifi-2.4G"
+        help
+            ESP32 多数只支持 2.4GHz。
+
+    config XZ_WIFI_PASSWORD
+        string "WiFi 密码"
+        default "your-password"
+
+endmenu
