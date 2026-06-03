@@ -46,11 +46,21 @@ def get_weather(city: str) -> str:
     return fake.get(city, f"暂无 {city} 的天气数据（这是演示用的假数据）")
 
 
+def search_knowledge(query: str) -> str:
+    """从私有知识库检索（RAG）。问到产品规格/FAQ/保修等资料时用，避免瞎编。"""
+    import rag  # 惰性导入：不用 RAG 时不触发建索引/网络
+    hits = rag.search(query, k=3)
+    if not hits:
+        return "知识库里没有找到相关内容。"
+    return "\n\n".join(f"[来源:{h['source']}] {h['text']}" for h in hits)
+
+
 # 名字 → 函数 的分发表
 DISPATCH = {
     "get_current_time": get_current_time,
     "calculate": calculate,
     "get_weather": get_weather,
+    "search_knowledge": search_knowledge,
 }
 
 
@@ -93,6 +103,23 @@ TOOLS = [
                     "city": {"type": "string", "description": "城市名，如 北京、上海"}
                 },
                 "required": ["city"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge",
+            "description": (
+                "从小智产品的私有知识库检索资料（产品规格、常见问题FAQ、保修售后政策等）。"
+                "当用户问到这些设备/产品相关信息时，先调用它拿到依据，再据此回答，不要凭空编造。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "要检索的问题或关键词"}
+                },
+                "required": ["query"],
             },
         },
     },

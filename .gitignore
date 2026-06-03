@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 venv/
 sessions.db
+rag_index.json
 
 # ESP-IDF 构建产物（生成物不入库；保留 sdkconfig.defaults）
 firmware-idf/**/build/
