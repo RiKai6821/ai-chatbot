@@ -104,11 +104,13 @@ def trim_history(msgs: list) -> None:
 
 
 async def acall_model(msgs: list, stream: bool):
-    """统一封装异步模型调用：并发限流 + 退避重试；异常转 HTTP 502，避免裸 500。"""
+    """统一封装异步模型调用：并发限流 + 超时 + 退避重试；异常转 HTTP，避免裸 500。"""
     try:
         return await resilience.acall(lambda: aclient.chat.completions.create(
             model=MODEL, messages=msgs, temperature=0.7, stream=stream,
         ))
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="上游响应超时，请稍后重试")
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
 
@@ -183,6 +185,8 @@ async def agent(req: ChatRequest):
             ),
             session_id=req.session_id,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="上游响应超时，请稍后重试")
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
     store.save(NS_AGENT, req.session_id, msgs)
@@ -228,6 +232,8 @@ async def voice(request: Request):
 
         # 3) 说：TTS → WAV（同样卸载到线程池）
         wav_out = await asyncio.to_thread(vs.tts_wav, reply)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="上游响应超时，请稍后重试")
     except OpenAIError as e:
         raise HTTPException(status_code=502, detail=f"上游模型调用失败：{e}")
     except Exception as e:
