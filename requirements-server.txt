@@ -1,4 +1,5 @@
-# 容器/服务端依赖：核心 + 语音接口(/voice)所需的 dashscope。
-# （pyaudio/pyttsx3 等是 PC 端 voice.py 用的，服务端不需要，故不在此。）
+# Server/container deps: core + dashscope for the /voice endpoint (STT/TTS).
+# (pyaudio/pyttsx3 are only for the PC client voice.py; the server doesn't need them.)
+# Keep this file ASCII so `pip install -r` works on Windows (GBK locale) too.
 -r requirements.txt
 dashscope>=1.20.0
